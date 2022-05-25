@@ -1,115 +1,419 @@
-import 'package:flutter/material.dart';
 
-void main() {
+import 'package:flutter/material.dart';
+import 'scripts/ServerState.dart';
+import 'scripts/receiveingState.dart';
+import 'scripts/tcpImplementation.dart';
+import './widgets/button.dart';
+import './widgets/receiver.dart';
+import './widgets/server.dart';
+import './widgets/dialogue.dart';
+import 'models/history.dart';
+import 'package:open_file/open_file.dart';
+
+const primaryColor = Colors.cyan;
+const popupprimary = Color.fromRGBO(238, 238, 238, 1);
+var primaryDark = Colors.cyan.shade600;
+final _serverState = ServerStatusBloc();
+final _recState = ReceivingState();
+
+
+void main(){
+
+  TCPImplementation tcp = TCPImplementation(port: 5000);
+  tcp.startServer(_serverState, _recState);
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({Key? key}) : super(key: key);
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // Try running your application with "flutter run". You'll see the
-        // application has a blue toolbar. Then, without quitting the app, try
-        // changing the primarySwatch below to Colors.green and then invoke
-        // "hot reload" (press "r" in the console where you ran "flutter run",
-        // or simply save your changes to "hot reload" in a Flutter IDE).
-        // Notice that the counter didn't reset back to zero; the application
-        // is not restarted.
-        primarySwatch: Colors.blue,
+        fontFamily: "Roboto",
+        primaryColor: Colors.cyan,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const MyHomePage(title: 'Share Karo'),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({Key? key, required this.title}) : super(key: key);
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
+  
   final String title;
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  _MyHomePageState createState() => _MyHomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateMixin {
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+  late AnimationController _controller;
+  String fileName = "";
+  String fileType = "";
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      lowerBound: 0.5,
+      duration: const Duration(seconds: 2),
+    )..repeat();
+    _recState.getJsonObj.listen((event) {
+      fileName = event.getName;
+      fileType = event.getType;
+    });
+  }
+
+
+  Widget _buildBody() {
+    return AnimatedBuilder(
+      animation: CurvedAnimation(parent: _controller, curve: Curves.fastOutSlowIn),
+      builder: (context, child) {
+        return Stack(
+          alignment: Alignment.center,
+          children: <Widget>[
+            _buildContainer(150 * _controller.value),
+            _buildContainer(200 * _controller.value),
+            _buildContainer(250 * _controller.value),
+            _buildContainer(300 * _controller.value),
+            _buildContainer(350 * _controller.value),
+            GestureDetector(
+              onTap: (){
+                DialogueGeneral(callback: Receiver(recState: _recState,fileName: fileName, fileType: fileType,),heightContainer: 170).genDailogue(context);
+              },
+                child: const Align(child: Icon(Icons.download_sharp, size: 44,))
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildContainer(double radius) {
+    return Container(
+      width: radius,
+      height: radius,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.cyan.withOpacity(1 - _controller.value),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.cyan,
+        title: Text(widget.title),
+
+      ),
+      body: Center(
+
+        child: Stack(
+          alignment: Alignment.topCenter,
+          children: [
+            Column(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 50.0),
+                  child: SizedBox(
+                      height: 300,
+                      width: 300,
+                      child: _buildBody()
+                  ),
+                ),
+              ],
+            ),
+            History(context: context)
+          ],
+        ),
+      )
+    );
+  }
+}
+
+// ignore: must_be_immutable
+class History extends StatefulWidget{
+
+  History ({Key? key, required this.context}) : super(key: key);
+
+  BuildContext context;
+
+  @override
+  State<History> createState() => _HistoryState();
+}
+
+class _HistoryState extends State<History> {
+  List<HistoryModel> history = historyModels;
+  late BuildContext cont;
+
+  @override
+  void initState(){
+    super.initState();
+     _recState.getMessage.listen((event){
+      DialogueGeneral(callback: acceptMessage(event),heightContainer: 120).genDailogue(context);
+    });
+    _serverState.serverstatus.listen((event) {
+      if(event){
+        DialogueGeneral(callback: Server(), heightContainer: 100).genDailogue(context);
+      }if(!event){
+        if(Navigator.canPop(context)){
+          Navigator.pop(context);
+        }
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Invoke "debug painting" (press "p" in the console, choose the
-          // "Toggle Debug Paint" action from the Flutter Inspector in Android
-          // Studio, or the "Toggle Debug Paint" command in Visual Studio Code)
-          // to see the wireframe for each widget.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headline4,
-            ),
-          ],
+    cont = context;
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        SizedBox(
+          width: MediaQuery.of(context).size.width,
+          height: 500,
+          // color: Colors.grey.shade200,
+          child: DraggableScrollableSheet(
+            initialChildSize: .50,
+            minChildSize: .45,
+            maxChildSize: .7,
+            builder: (BuildContext context, ScrollController scrollController){
+              return  Column(
+                children: [
+                  headings(),
+                  Expanded(
+                    // width: MediaQuery.of(context).size.width,
+                    // height: 500,
+                      child: ListView.builder(
+                        scrollDirection: Axis.vertical,
+                        physics: const BouncingScrollPhysics(
+                            parent: AlwaysScrollableScrollPhysics()),
+                        controller: scrollController,
+                        itemCount: history.length,
+                        itemBuilder: (context, index){
+                          return Container(
+                            padding: const EdgeInsets.all(5),
+                            child: ExpansionTile(
+                              backgroundColor: Colors.grey.shade300,
+                              collapsedBackgroundColor: Colors.grey.shade200,
+                              title: Text(
+                                "${history[index].getName}",
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize:16,color: Color.fromRGBO(0, 0, 0, 0.62),),
+                              ),
+                              subtitle: Text(
+                                "${history[index].getPath}",
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize:8,color: Color.fromRGBO(0, 0, 0, 0.62),
+
+                                ),
+                              ),
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 4.0),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Padding(
+                                            padding: const EdgeInsets.fromLTRB(20, 10, 0, 10),
+                                            child: Text("${history[index].getDateTime}", style: const TextStyle(fontSize:12,color: Color.fromRGBO(0, 0, 0, 0.62),),),
+                                          ),
+                                        ],
+                                      ),
+                                      Container(
+                                        alignment: Alignment.center,
+                                        height: 30,
+                                        width: 70,
+                                        child: ElevatedButton(
+                                          style: ButtonStyle(
+                                              shape: MaterialStateProperty.all<OutlinedBorder>(RoundedRectangleBorder(borderRadius: BorderRadius.circular(20.0))),
+                                              backgroundColor: MaterialStateProperty.all<Color>(primaryDark),
+                                              foregroundColor: MaterialStateProperty.all<Color>(Colors.white)
+                                          ),
+                                          onPressed: (){
+                                            setState(() {
+                                              OpenFile.open("${history[index].getPath}/${history[index].getName}");
+                                            });
+                                          },
+                                          child:Text("${history[index].getType}",style: const TextStyle(fontSize:12)),
+                                        ),
+                                      ),
+                                      SizedBox(
+                                        height: 40,
+                                        width: 70,
+                                        child: Center(
+                                          child: ElevatedButton(
+                                            style: ButtonStyle(
+                                                shape: MaterialStateProperty.all<OutlinedBorder>(RoundedRectangleBorder(borderRadius: BorderRadius.circular(100.0))),
+                                                backgroundColor: MaterialStateProperty.all<Color>(primaryDark),
+                                                foregroundColor: MaterialStateProperty.all<Color>(Colors.white)
+                                            ),
+                                            onPressed: (){
+                                              setState(() {
+                                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                                  content: Text("Deleted ${history[index].getName}",
+                                                    style: const TextStyle(color: Colors.black54,),),
+                                                  backgroundColor: Colors.cyan,
+                                                  elevation: 0.5,
+                                                  dismissDirection: DismissDirection.horizontal,
+                                                ));
+                                                history.removeAt(index);
+                                              });
+                                            },
+                                            child: const Icon(Icons.delete, size: 20,),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+
+                      )
+
+                  )
+                ],
+              );
+            },
+          ),
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+      ],
     );
   }
+
+  Widget headings(){
+    return (
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              children: const [
+                Text("Your history", style: TextStyle(fontFamily: "Roboto", fontSize: 24.0, color: primaryColor,fontWeight: FontWeight.w600)),
+                Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: Image(image: AssetImage("assets/images/history.png")),
+                )
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: OutlinedButton(
+              style: ButtonStyle(
+                side: MaterialStateProperty.all<BorderSide>(const BorderSide(color: Color.fromRGBO(62, 118, 121, 0.67), width: 1.5)),
+                shape: MaterialStateProperty.all<OutlinedBorder>(RoundedRectangleBorder(borderRadius: BorderRadius.circular(20.0)))
+              ),
+              onPressed: (){
+                DialogueGeneral(callback: clearAll(), heightContainer: 120).genDailogue(widget.context);
+            }, child: const Text("clear all", style: TextStyle(fontSize: 15.0, color: primaryColor)))
+          ),
+
+        ],
+      )
+    );
+  }
+
+  Widget clearAll(){
+      return Column(
+        textDirection: TextDirection.ltr,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Row(
+              children: [
+                Text("Are you sure you want to clear all?",
+                style: TextStyle(fontFamily: "Roboto", color: primaryDark, fontSize: 15, fontWeight: FontWeight.normal,decoration: TextDecoration.none)),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20,0,20,0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Container(
+                    height: 35,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(50.0)
+                    ),
+                    child: Button(color: Colors.transparent,text: "Cancel", textColor:primaryDark, callback: (){Navigator.pop(context);},)
+                  ),
+                ),
+              Button(color: primaryDark, text:"Yes", textColor: Colors.white, callback: (){
+                historyModels.clear();
+                Navigator.pop(context);
+                }
+              )
+              ],
+            ),
+          )
+        ],
+      );
+  }
+
+  Widget acceptMessage(msg){
+      return Column(
+        textDirection: TextDirection.ltr,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Row(
+              children: [
+                Text("$msg",
+                style: TextStyle(fontFamily: "Roboto", color: primaryDark, fontSize: 17, fontWeight: FontWeight.normal,decoration: TextDecoration.none)),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20,0,20,0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Container(
+                    height: 35,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(50.0)
+                    ),
+                    child: Button(color: Colors.transparent,text: "Cancel", textColor:primaryDark, callback: (){
+                      _recState.sendResp.add("n");
+                      Navigator.pop(context);
+                    },)
+                  ),
+                ),
+              Button(color: primaryDark, text:"Yes", textColor: Colors.white, callback: (){
+                  _recState.sendResp.add("y");
+                  Navigator.pop(context);
+                })
+              ],
+            ),
+          )
+        ],
+      );
+    }
 }
