@@ -28,6 +28,6 @@ class HistoryModel{
 }
 
 List<HistoryModel> historyModels  = [
-  HistoryModel(name: "file name", dateTime: DateTime.now(), type: "Image", path: "/storage/emulated/0/Android/data/com.example.render/files"),
+  HistoryModel(name: "file name", dateTime: DateTime.now(), type: "type", path: "/storage/emulated/0/Android/data/com.example.sharekaroapp/files"),
 
 ];
