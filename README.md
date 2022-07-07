@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/Header.gif" alt="Header" width="100%"/></a></p>
+<p align="center"><img src="assets/Header.png" alt="Header" width="100%"/></a></p>
 
 **<h1 align="center">Share Karo 📩</h1>**
 
